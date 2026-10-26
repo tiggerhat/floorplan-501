@@ -1,0 +1,36 @@
+[hidden]{display:none!important}
+button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--teal);outline-offset:3px}
+.geometry-tools{position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:4;display:flex;gap:3px;padding:4px;background:var(--panel);border:1px solid var(--line);border-radius:8px;max-width:calc(100% - 24px);overflow:auto}
+.geometry-tools .btn{min-height:34px}
+#plan.tool-geometry{cursor:crosshair}
+#plan.tool-geometry .furn{pointer-events:none}
+#plan.tool-geometry .geo-hit{cursor:move}
+#plan.tool-geometry .geo-hit:hover{stroke:var(--accent);stroke-opacity:.5}
+.geo-handle{cursor:ew-resize;touch-action:none}
+.geo-handle.vertical{cursor:ns-resize}
+.geo-vertex{cursor:move}
+.geometry-form{display:grid;grid-template-columns:1fr 1fr;gap:10px 8px}
+.geometry-form label{display:flex;flex-direction:column;gap:4px;color:#63594c;font-size:12px}
+.geometry-form .full{grid-column:1/-1}
+.geometry-form input,.geometry-form select,.geometry-form textarea,.geometry-picker{width:100%;padding:7px 8px;border:1px solid var(--line);border-radius:6px;background:white;font:inherit;color:var(--ink);min-height:36px}
+.geometry-form textarea{resize:vertical;min-height:150px;user-select:text;font:12px/1.6 ui-monospace,Menlo,monospace}
+.geometry-form .check{display:flex;flex-direction:row;align-items:flex-start;gap:6px}
+.geometry-form .check input{width:16px;height:16px;min-height:0;margin:2px 0}
+.geometry-help{color:#63594c;font-size:12px;line-height:1.65;margin:8px 0}
+.geometry-error{min-height:20px;color:#a52e23;font-size:12px;margin:8px 0 0}
+.geometry-count{font-variant-numeric:tabular-nums;color:var(--muted);margin:6px 0 10px}
+#geometryTools~.modehint{top:64px;max-width:calc(100% - 24px);width:max-content;border-radius:6px;text-align:center}
+#geometryNotice{position:fixed;bottom:35px;left:50%;transform:translateX(-50%);z-index:5;padding:4px 10px;background:var(--panel);border:1px solid var(--line);border-radius:5px;color:#63594c;font-size:11px;max-width:calc(100% - 28px);text-align:center;pointer-events:none}
+#panel .geometry-form .actions{margin-top:2px}
+.geometry-form button.primary{border-color:var(--accent);background:var(--accent);color:white}
+@media(max-width:600px){
+  header{padding:6px 8px;gap:5px}
+  header .brand{flex:1 0 48%}
+  header .brand b{font-size:14px}
+  .geometry-tools{top:8px;left:8px;right:8px;transform:none;max-width:none;gap:0}
+  .geometry-tools .btn{padding:6px 8px;min-height:40px}
+  #geometryTools~.modehint{top:62px;font-size:11px;max-width:calc(100% - 16px)}
+  .geometry-form input,.geometry-form select{font-size:16px;min-height:42px}
+  #geometryNotice{bottom:34px;font-size:10px;width:max-content;max-width:calc(100% - 14px)}
+}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important}}
