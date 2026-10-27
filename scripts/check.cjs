@@ -13,5 +13,5 @@ for(const match of html.matchAll(/<script([^>]*)>([\s\S]*?)<\/script>/g)){
  const r=spawnSync(process.execPath,['--input-type='+ (match[1].includes('module')?'module':'commonjs'),'--check'],{input:match[2],encoding:'utf8'});
  if(r.status!==0)throw Error(r.stderr);
 }
-for(const match of html.matchAll(/(?:src|href)="([^"<>]+\.(?:js|css))"/g))if(!fs.existsSync(path.join(root,match[1])))throw Error('Missing asset: '+match[1]);
+for(const match of html.matchAll(/(?:src|href)="([^"<>]+\.(?:js|css)(?:\?[^"<>]*)?)"/g))if(!fs.existsSync(path.join(root,match[1].split('?')[0])))throw Error('Missing asset: '+match[1]);
 console.log('HTML scripts, import map and local assets OK');

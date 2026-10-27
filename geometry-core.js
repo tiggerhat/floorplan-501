@@ -6,6 +6,15 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function() {
   'use strict';
   const keys = ['WALLS', 'WINS', 'DOORS', 'SLIDES', 'ROOMS'];
+  const openingPresets = [
+    {id:'door',kind:'door',name:'平开门',length:900,thickness:240,height:2100},
+    {id:'slide',kind:'slide',name:'推拉门',length:1800,thickness:240,height:2400,panels:2},
+    {id:'casement',kind:'window',name:'普通窗',style:'casement',length:1500,thickness:240,sill:900,head:2400,panels:2},
+    {id:'sliding-window',kind:'window',name:'推拉窗',style:'sliding',length:1800,thickness:240,sill:900,head:2400,panels:2},
+    {id:'fixed-window',kind:'window',name:'固定窗',style:'fixed',length:1500,thickness:240,sill:900,head:2400,panels:1},
+    {id:'floor-window',kind:'window',name:'落地窗',style:'floor',length:2400,thickness:240,sill:0,head:2600,panels:3},
+    {id:'bay-window',kind:'window',name:'深窗台窗',style:'bay',length:1800,thickness:600,sill:450,head:2400,panels:3}
+  ];
   const clone = value => JSON.parse(JSON.stringify(value));
   const finite = n => typeof n === 'number' && Number.isFinite(n) && Math.abs(n) <= 200000;
   const fail = message => { throw new Error(message); };
@@ -41,7 +50,12 @@
       const unit = v => point(v) && Math.abs(v[0])+Math.abs(v[1])===1;
       if (!d || !rectangle(d.rect) || !point(d.h) || !unit(d.c) || !unit(d.o) || d.c[0]*d.o[0]+d.c[1]*d.o[1]!==0 || !finite(d.len) || d.len<50 || d.len>20000 || typeof d.name!=='string') fail('门洞、门宽或开启方向无效');
     });
-    g.SLIDES.forEach(d => { if (!d || !rectangle(d.rect) || typeof d.v!=='boolean') fail('推拉门数据无效'); });
+    g.SLIDES.forEach(d => {
+      if (!d || !rectangle(d.rect) || typeof d.v!=='boolean') fail('推拉门数据无效');
+      d.name=typeof d.name==='string'?d.name:'推拉门';d.height=d.height??2400;d.panels=d.panels??2;
+      if(!finite(d.height)||d.height<100||d.height>2800||![2,3,4].includes(d.panels))fail('推拉门高度须为 100–2800 mm，扇数可选 2、3、4');
+      d.v=d.rect[3]-d.rect[1]>d.rect[2]-d.rect[0];
+    });
     const ids = new Set();
     g.ROOMS.forEach(r => {
       if (!r || typeof r.id!=='string' || !/^[a-zA-Z0-9_-]{1,80}$/.test(r.id) || ['__proto__','constructor','prototype'].includes(r.id) || ids.has(r.id) || typeof r.name!=='string' || !polygon(r.poly) || r.at && !point(r.at)) fail('房间边界无效：至少 3 个顶点，不可交叉、重叠或使用重复编号');
@@ -51,6 +65,11 @@
       const h = g.windowHeights?.[i] || {sill:900, head:2400};
       if (!finite(h.sill) || !finite(h.head) || h.sill<0 || h.head<=h.sill || h.head>2800) fail('窗台高度须 ≥ 0，窗顶须高于窗台且不超过 2800 mm');
       return {sill:h.sill,head:h.head};
+    });
+    g.windowStyles=g.WINS.map((_,i)=>{
+      const st=g.windowStyles?.[i]||{style:'casement',panels:2};
+      if(!['casement','sliding','fixed','floor','bay'].includes(st.style)||!Number.isInteger(st.panels)||st.panels<1||st.panels>6)fail('窗型或分扇数量无效');
+      return {style:st.style,panels:st.panels};
     });
     return g;
   }
@@ -96,9 +115,10 @@
   }
   function replaceRect(input,kind,index,rect,link=false) {
     if (!rectangle(rect)) fail('长和厚须大于 0');
-    const g=clone(input), key={wall:'WALLS',window:'WINS',door:'DOORS'}[kind];
+    const g=clone(input), key={wall:'WALLS',window:'WINS',door:'DOORS',slide:'SLIDES'}[kind];
     if (!key || !g[key][index]) fail('未找到所选对象');
     if(kind==='door') g.DOORS[index]=resizeDoor(g.DOORS[index],rect);
+    else if(kind==='slide')g.SLIDES[index]={...g.SLIDES[index],rect:rect.slice(0,4),v:rect[3]-rect[1]>rect[2]-rect[0]};
     else {
       const old=g[key][index];
       if(kind==='wall' && link) linkRooms(g.ROOMS,old,rect);
@@ -107,9 +127,18 @@
     return normalize(g);
   }
   function remove(input,kind,index) {
-    const g=clone(input),key={wall:'WALLS',window:'WINS',door:'DOORS',room:'ROOMS'}[kind];
+    const g=clone(input),key={wall:'WALLS',window:'WINS',door:'DOORS',slide:'SLIDES',room:'ROOMS'}[kind];
     if(!key || !g[key][index]) fail('未找到所选对象');
-    g[key].splice(index,1); if(kind==='window') g.windowHeights?.splice(index,1);
+    g[key].splice(index,1); if(kind==='window'){g.windowHeights?.splice(index,1);g.windowStyles?.splice(index,1);}
+    return normalize(g);
+  }
+  function insertOpening(input,presetId,rect){
+    const p=openingPresets.find(p=>p.id===presetId);if(!p)fail('门窗组件不存在');
+    if(!rectangle(rect))fail('门窗尺寸无效');
+    const g=normalize(input),v=dimensions(rect).vertical;
+    if(p.kind==='door')g.DOORS.push({name:p.name,rect,h:rect.slice(0,2),c:v?[0,1]:[1,0],o:v?[1,0]:[0,1],len:dimensions(rect).length});
+    else if(p.kind==='slide')g.SLIDES.push({name:p.name,rect,v,height:p.height,panels:p.panels});
+    else{g.WINS.push(rect);g.windowHeights.push({sill:p.sill,head:p.head});g.windowStyles.push({style:p.style,panels:p.panels});}
     return normalize(g);
   }
   function subtractRect(r,cut) {
@@ -139,5 +168,5 @@
     const xs=pts.map(p=>p[0]),ys=pts.map(p=>p[1]),x=Math.min(...xs)-2000,y=Math.min(...ys)-1800;
     return {x,y,w:Math.max(5000,Math.max(...xs)-x+2000),h:Math.max(5000,Math.max(...ys)-y+2500)};
   }
-  return {clone,normalize,rectangle,polygon,dimensions,makeRect,moveRect,resizeDoor,replaceRect,remove,subtractRect,solidRects,bounds,keys};
+  return {clone,normalize,rectangle,polygon,dimensions,makeRect,moveRect,resizeDoor,replaceRect,remove,insertOpening,openingPresets,subtractRect,solidRects,bounds,keys};
 });

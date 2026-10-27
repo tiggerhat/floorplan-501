@@ -60,3 +60,25 @@ test('demolition indices and dynamic bounds use current geometry',()=>{
  g.WALLS.push([-5000,0,-4500,8000,'u']);const b=G.bounds(g);
  assert.ok(b.x<=-5000&&b.y<=0&&b.x+b.w>=4000&&b.y+b.h>=8000);
 });
+test('sliding doors can be resized, rotated, copied and deleted like other openings',()=>{
+ const g=geometry();g.SLIDES=[{rect:[1000,0,2800,240],v:false,name:'推拉门',height:2300,panels:3}];
+ const resized=G.replaceRect(g,'slide',0,[1000,500,1240,2900]);
+ assert.equal(resized.SLIDES[0].v,true);assert.equal(resized.SLIDES[0].height,2300);assert.equal(resized.SLIDES[0].panels,3);
+ assert.deepEqual(G.remove(resized,'slide',0).SLIDES,[]);
+ assert.equal(g.SLIDES[0].v,false);
+ const legacy=geometry();legacy.SLIDES=[{rect:[1000,0,2800,240],v:false}];
+ assert.equal(G.normalize(legacy).SLIDES[0].height,2400);
+ legacy.SLIDES[0].height=3000;assert.throws(()=>G.normalize(legacy),/推拉门高度/);
+});
+test('all visible opening presets insert real editable geometry and survive JSON export',()=>{
+ assert.ok(G.openingPresets.length>=7);
+ for(const preset of G.openingPresets){
+  const g=G.insertOpening(geometry(),preset.id,[1000,0,2800,240]);
+  const roundtrip=G.normalize(JSON.parse(JSON.stringify(g)));
+  if(preset.kind==='slide')assert.equal(roundtrip.SLIDES.length,1);
+  if(preset.kind==='door')assert.equal(roundtrip.DOORS.length,1);
+  if(preset.kind==='window'){assert.equal(roundtrip.WINS.length,2);assert.equal(roundtrip.windowStyles[1].style,preset.style);}
+ }
+ const g=G.insertOpening(geometry(),'fixed-window',[2500,0,3500,240]);
+ assert.equal(G.remove(g,'window',0).windowStyles[0].style,'fixed');
+});

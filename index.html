@@ -8,8 +8,8 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="theme-color" content="#fffdf9">
 <title>501 户型编辑器</title>
-<link rel="stylesheet" href="geometry-editor.css">
-<script src="geometry-core.js"></script>
+<link rel="stylesheet" href="geometry-editor.css?v=2.1.0">
+<script src="geometry-core.js?v=2.1.0"></script>
 <style>
 :root{
   --bg:#f3efe7; --paper:#f7f4ee; --panel:#fffdf9; --line:#e3dccf; --ink:#2b2824; --muted:#8a8174;
@@ -311,6 +311,8 @@ main.drawer-panel #fab{opacity:0;visibility:hidden}
       <button class="btn" data-geommode="wall">画墙</button>
       <button class="btn" data-geommode="window">画窗</button>
       <button class="btn" data-geommode="door">画门</button>
+      <button class="btn" data-geommode="slide">推拉门</button>
+      <button class="btn" id="showOpeningLibrary">门窗组件</button>
       <button class="btn" data-geommode="room">画房间</button>
     </div>
     <svg id="plan" class="tool-select" font-family="-apple-system,'PingFang SC','Microsoft YaHei',sans-serif">
@@ -502,7 +504,7 @@ function redo(){ if (!redoStack.length) return; undoStack.push(snap()); state = 
 function validateSel(){
   if (ui.sel?.kind==='furn' && !getF(ui.sel.id)) ui.sel = null;
   if (ui.sel?.kind==='room' && !state.geometry.ROOMS.some(r=>r.id===ui.sel.id)) ui.sel=null;
-  if(ui.sel?.kind==='geometry' && !state.geometry[{wall:'WALLS',window:'WINS',door:'DOORS',room:'ROOMS'}[ui.sel.geoKind]]?.[ui.sel.index])ui.sel=null;
+  if(ui.sel?.kind==='geometry' && !state.geometry[{wall:'WALLS',window:'WINS',door:'DOORS',slide:'SLIDES',room:'ROOMS'}[ui.sel.geoKind]]?.[ui.sel.index])ui.sel=null;
 }
 const getF = id => state.furniture.find(f => f.id === id);
 
@@ -685,11 +687,18 @@ function renderWalls(){
 function renderOpenings(){
   const WS = 'stroke="#4f7394" stroke-width="1" vector-effect="non-scaling-stroke"';
   let s = '';
-  WINS.forEach(([x0,y0,x1,y1]) => {
+  WINS.forEach(([x0,y0,x1,y1],index) => {
     const w = x1-x0, h = y1-y0;
-    s += `<rect x="${x0}" y="${y0}" width="${w}" height="${h}" fill="#f7fbfd" ${WS}/>`;
+    const spec=state.geometry.windowStyles[index],hz=w>=h,n=spec.panels;
+    s += `<g data-window-style="${spec.style}" data-window-index="${index}"><rect x="${x0}" y="${y0}" width="${w}" height="${h}" fill="#f7fbfd" ${WS}/>`;
     if (w >= h) [1/3,2/3].forEach(t => s += `<line x1="${x0}" y1="${y0+h*t}" x2="${x1}" y2="${y0+h*t}" ${WS}/>`);
     else [1/3,2/3].forEach(t => s += `<line x1="${x0+w*t}" y1="${y0}" x2="${x0+w*t}" y2="${y1}" ${WS}/>`);
+    for(let j=1;j<n;j++)s+=hz?`<path d="M${x0+w*j/n} ${y0}V${y1}" ${WS}/>`:`<path d="M${x0} ${y0+h*j/n}H${x1}" ${WS}/>`;
+    if(spec.style==='sliding'){
+      const cx=(x0+x1)/2,cy=(y0+y1)/2,len=Math.min(hz?w:h,600)*.25;
+      s+=hz?`<path d="M${cx-len} ${cy}H${cx+len}m-80 -60 80 60-80 60" fill="none" ${WS}/>`:`<path d="M${cx} ${cy-len}V${cy+len}m-60 -80 60 80 60-80" fill="none" ${WS}/>`;
+    }
+    s+='</g>';
   });
   const DS = 'stroke="#3d3a34" stroke-width="1" vector-effect="non-scaling-stroke"';
   DOORS.forEach(d => {
@@ -700,9 +709,14 @@ function renderOpenings(){
     s += `<polygon points="${hx},${hy} ${ox},${oy} ${ox+d.c[0]*T},${oy+d.c[1]*T} ${hx+d.c[0]*T},${hy+d.c[1]*T}" fill="#fff" stroke="${col}" stroke-width="${d.entry?1.8:1}" vector-effect="non-scaling-stroke"/>`;
     s += `<path d="M${ox} ${oy}A${L} ${L} 0 0 ${sweep} ${cx} ${cy}" fill="none" ${DS} stroke-dasharray="5 3" opacity=".7"/>`;
   });
-  SLIDES.forEach(({rect:[x0,y0,x1,y1],v}) => {
-    if (v){ const L = y1-y0, m = (x0+x1)/2; s += `<rect x="${m-45}" y="${y0}" width="40" height="${L*.55}" fill="#fff" ${DS}/><rect x="${m+5}" y="${y1-L*.55}" width="40" height="${L*.55}" fill="#fff" ${DS}/>`; }
-    else { const L = x1-x0, m = (y0+y1)/2; s += `<rect x="${x0}" y="${m-45}" width="${L*.55}" height="40" fill="#fff" ${DS}/><rect x="${x1-L*.55}" y="${m+5}" width="${L*.55}" height="40" fill="#fff" ${DS}/>`; }
+  SLIDES.forEach(({rect:[x0,y0,x1,y1],v,panels},index) => {
+    const L=v?y1-y0:x1-x0,step=L/panels,leaf=step+Math.min(50,step*.1),mid=v?(x0+x1)/2:(y0+y1)/2;
+    s+=`<g data-sliding-door="${index}" data-panels="${panels}">`;
+    for(let k=0;k<panels;k++){
+      const off=k%2?-25:25,start=(v?y0:x0)+k*step;
+      s+=v?`<rect x="${mid+off-20}" y="${start}" width="40" height="${Math.min(leaf,L-k*step)}" fill="#eef5f8" ${DS}/>`:`<rect x="${start}" y="${mid+off-20}" width="${Math.min(leaf,L-k*step)}" height="40" fill="#eef5f8" ${DS}/>`;
+    }
+    s+='</g>';
   });
   // 501 入户箭头（与原始图相同朝向）
   s += `<path d="M4300 9250H5500M5300 9050L5500 9250L5300 9450" fill="none" stroke="#b5653a" stroke-width="25"/><text x="4300" y="9000" font-size="220">入户</text>`;
@@ -1436,7 +1450,7 @@ buildDefs(); buildLib(); renderOpenings(); renderDims();
 $('#tip').textContent = TIPS()['2d'];
 fitView(); renderAll();
 </script>
-<script src="geometry-editor.js"></script>
+<script src="geometry-editor.js?v=2.1.0"></script>
 <script type="module">
 /* ============================================================
  *  3D 场景（three.js）—— 与 2D 共用 state / ui，切换时带过渡动画：
@@ -2243,7 +2257,7 @@ function buildArch(){
     colliders.push([wx(w[0]), wz(w[1]), wx(w[2]), wz(w[3])]);
   });
   // 门洞、飘窗洞口上方过梁
-  [...DOORS.map(d => [d.rect, 2.1]), ...SLIDES.map(s => [s.rect, s.v ? 2.4 : 2.1])]
+  [...DOORS.map(d => [d.rect, 2.1]), ...SLIDES.map(s => [s.rect, s.height/1000])]
     .forEach(([r, h]) => { if (top > h) wallBox(r, h, top); });
   WINS.forEach((r, i) => {
     const sill = state.geometry.windowHeights[i].sill/1000, head = state.geometry.windowHeights[i].head/1000;
@@ -2252,7 +2266,7 @@ function buildArch(){
     const gTop = Math.min(head, top); if (gTop <= sill) return;
     const [x0, y0, x1, y1] = r, hz = (x1-x0) >= (y1-y0), L = M(hz ? x1-x0 : y1-y0), gh = gTop - sill, cx = wx((x0+x1)/2), cz = wz((y0+y1)/2);
     const pane = new THREE.Mesh(new THREE.BoxGeometry(hz ? L : .01, gh, hz ? .01 : L), glassMat); pane.position.set(cx, sill + gh/2, cz); archUp.add(pane);
-    const n = Math.max(1, Math.round(L/.9));
+    const n = state.geometry.windowStyles[i].panels;
     for (let k = 0; k <= n; k++){ const t = -L/2 + k*L/n, mu = new THREE.Mesh(new THREE.BoxGeometry(hz ? .04 : .06, gh, hz ? .06 : .04), frameMat);
       mu.position.set(cx + (hz ? t : 0), sill + gh/2, cz + (hz ? 0 : t)); mu.castShadow = true; archUp.add(mu); }
     [sill + .02, gTop - .02].forEach(y => { const tr = new THREE.Mesh(new THREE.BoxGeometry(hz ? L : .06, .04, hz ? .06 : L), frameMat); tr.position.set(cx, y, cz); archUp.add(tr); });
@@ -2268,14 +2282,14 @@ function buildArch(){
     door.cur = door.a1; pivot.rotation.y = door.cur; leaf.userData.door = knob.userData.door = door;
     doors.push(door); archUp.add(pivot);
   });
-  SLIDES.forEach(({rect:[x0, y0, x1, y1], v}) => {
-    const L = M(v ? y1-y0 : x1-x0), ph = Math.min(v ? 2.4 : 2.1, top), pl = L*.55;
-    [[-1, -.02], [1, .02]].forEach(([s, off]) => {
-      const c = s < 0 ? -L/2 + pl/2 : L/2 - pl/2, x = v ? wx((x0+x1)/2) + off : wx(x0) + L/2 + c, z = v ? wz(y0) + L/2 + c : wz((y0+y1)/2) + off;
-      const p = new THREE.Mesh(new THREE.BoxGeometry(v ? .02 : pl, ph, v ? pl : .02), glassMat); p.position.set(x, ph/2, z); archUp.add(p);
+  SLIDES.forEach(({rect:[x0, y0, x1, y1], v,height,panels},index) => {
+    const L = M(v ? y1-y0 : x1-x0), ph = Math.min(height/1000, top), step=L/panels, pl=step+.02;
+    for(let k=0;k<panels;k++){
+      const off=k%2?.025:-.025,c=step*(k+.5),x=v?wx((x0+x1)/2)+off:wx(x0)+c,z=v?wz(y0)+c:wz((y0+y1)/2)+off;
+      const p = new THREE.Mesh(new THREE.BoxGeometry(v ? .02 : pl, ph, v ? pl : .02), glassMat); p.position.set(x, ph/2, z);p.userData.slidingDoor=index;archUp.add(p);
       [ph - .03, .03].forEach(y => { const fr = new THREE.Mesh(new THREE.BoxGeometry(v ? .04 : pl, .05, v ? pl : .04), frameMat); fr.position.set(x, y, z); archUp.add(fr); });
       [-1, 1].forEach(e => { const fr = new THREE.Mesh(new THREE.BoxGeometry(.04, ph, .04), frameMat); fr.position.set(v ? x : x + e*pl/2, ph/2, v ? z + e*pl/2 : z); archUp.add(fr); });
-    });
+    }
   });
   applyLight(); applyGrow();
 }

@@ -2,6 +2,12 @@
 button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--teal);outline-offset:3px}
 .geometry-tools{position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:4;display:flex;gap:3px;padding:4px;background:var(--panel);border:1px solid var(--line);border-radius:8px;max-width:calc(100% - 24px);overflow:auto}
 .geometry-tools .btn{min-height:34px}
+.opening-palette{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px}
+.opening-component{display:flex;align-items:center;gap:7px;text-align:left;padding:9px 7px;min-height:58px;border:1px solid var(--line);border-radius:6px;background:white;cursor:pointer}
+.opening-component:hover,.opening-component.on{border-color:var(--accent);background:var(--accent-soft)}
+.opening-component svg{width:30px;height:30px;flex:none;fill:none;stroke:var(--teal);stroke-width:1.5;stroke-linejoin:round}
+.opening-component span{font-size:12px;line-height:1.4}.opening-component small{display:block;color:#63594c;font-size:10px}
+#openingLibrary summary{cursor:pointer;font-weight:600}#openingLibrary summary::marker{color:var(--accent)}
 #plan.tool-geometry{cursor:crosshair}
 #plan.tool-geometry .furn{pointer-events:none}
 #plan.tool-geometry .geo-hit{cursor:move}
