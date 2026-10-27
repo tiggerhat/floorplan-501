@@ -50,7 +50,7 @@ async function session(request,env){
 async function authenticate(request,env,register){
   if(env.AUTH_LIMITER){const result=await env.AUTH_LIMITER.limit({key:request.headers.get('CF-Connecting-IP')||'unknown'});if(!result.success)bad(429,'尝试次数较多，请一分钟后重试');}
   const input=await body(request),password=input?.password;
-  if(typeof password!=='string'||password.length<12||password.length>128)bad(400,'访问密码需要 12–128 个字符');
+  if(typeof password!=='string'||password.length<6||password.length>128)bad(400,'访问密码需要 6–128 个字符');
   const userId=await identity(password,env.IDENTITY_KEY),key='users/'+userId+'.json';
   let object=await env.PLANS.get(key),user=object?await object.json():null;
   if(register){

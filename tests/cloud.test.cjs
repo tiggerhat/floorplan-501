@@ -23,6 +23,11 @@ function plan(x=4000){return {version:2,geometry:{WALLS:[[0,0,x,240,'u']],WINS:[
 
 test('cloud: password login, logout and no plaintext passwords in JSON storage',async()=>{
  const env=environment(),auth=await register(env);
+ const shortEnv=environment();
+ assert.equal((await call(shortEnv,'/api/register','POST',{password:'Abc12',label:'短密码'})).status,400);
+ const six=await register(shortEnv,'Abc123','六位密码');
+ assert.equal((await call(shortEnv,'/api/login','POST',{password:'Abc123'})).data.user.id,six.user.id);
+ assert.equal((await call(shortEnv,'/api/login','POST',{password:'Abc12'})).status,400);
  assert.equal((await call(env,'/api/login','POST',{password:'wrong-long-password'})).status,401);
  const login=await call(env,'/api/login','POST',{password:passwordA});assert.equal(login.status,200);assert.equal(login.data.user.id,auth.user.id);
  assert.notEqual(login.data.token,auth.token);assert.ok([...env.PLANS.data.values()].every(v=>!v.body.includes(passwordA)));
