@@ -9,7 +9,7 @@
 <meta name="theme-color" content="#fffdf9">
 <title>501 户型编辑器</title>
 <link rel="stylesheet" href="geometry-editor.css?v=2.1.0">
-<script src="geometry-core.js?v=3.1.0"></script>
+<script src="geometry-core.js?v=3.2.0"></script>
 <link rel="stylesheet" href="cloud-sync.css?v=3.0.0">
 <script src="cloud-config.js?v=3.0.0"></script>
 <style>
@@ -315,6 +315,7 @@ main.drawer-panel #fab{opacity:0;visibility:hidden}
       <button class="btn" data-geommode="door">画门</button>
       <button class="btn" data-geommode="slide">推拉门</button>
       <button class="btn" id="showOpeningLibrary">门窗组件</button>
+      <button class="btn" id="showFacilityLibrary">建筑设施</button>
       <button class="btn" data-geommode="room">画房间</button>
     </div>
     <svg id="plan" class="tool-select" font-family="-apple-system,'PingFang SC','Microsoft YaHei',sans-serif">
@@ -323,6 +324,7 @@ main.drawer-panel #fab{opacity:0;visibility:hidden}
       <g id="gRooms"></g>
       <g id="gFurn"></g>
       <g id="gWalls"></g>
+      <g id="gFacilities"></g>
       <g id="gOpen"></g>
       <g id="gLabels" pointer-events="none"></g>
       <g id="gDims" pointer-events="none"></g>
@@ -463,7 +465,7 @@ function defaultFurniture(){ return []; }
 
 function defaultState(){
   const rooms = {}; BASE_GEOMETRY.ROOMS.forEach(r => rooms[r.id] = {name:r.name, mat:r.mat});
-  return {version:2,geometry:FloorGeometry.clone(BASE_GEOMETRY),furniture:defaultFurniture(), rooms, demolished:[], measures:[]};
+  return {version:2,geometry:FloorGeometry.normalize(BASE_GEOMETRY),furniture:defaultFurniture(), rooms, demolished:[], measures:[]};
 }
 
 const STORE = '501-editable-v2';
@@ -510,7 +512,7 @@ function redo(){ if (!redoStack.length) return; undoStack.push(snap()); state = 
 function validateSel(){
   if (ui.sel?.kind==='furn' && !getF(ui.sel.id)) ui.sel = null;
   if (ui.sel?.kind==='room' && !state.geometry.ROOMS.some(r=>r.id===ui.sel.id)) ui.sel=null;
-  if(ui.sel?.kind==='geometry' && !state.geometry[{wall:'WALLS',window:'WINS',door:'DOORS',slide:'SLIDES',room:'ROOMS'}[ui.sel.geoKind]]?.[ui.sel.index])ui.sel=null;
+  if(ui.sel?.kind==='geometry' && !state.geometry[{wall:'WALLS',window:'WINS',door:'DOORS',slide:'SLIDES',room:'ROOMS',facility:'FACILITIES'}[ui.sel.geoKind]]?.[ui.sel.index])ui.sel=null;
 }
 const getF = id => state.furniture.find(f => f.id === id);
 
@@ -680,6 +682,14 @@ function renderFurn(){
   }).join('');
 }
 
+function renderFacilities(){
+  $('#gFacilities').innerHTML=(state.geometry.FACILITIES||[]).map(f=>{
+    const [x,y,x1,y1]=f.rect,w=x1-x,h=y1-y,inset=Math.min(55,w*.15,h*.15);
+    const color=f.type==='column'?'#8f897d':'#aab5b4';
+    return `<g pointer-events="none"><rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${color}" stroke="#464b4b" stroke-width="1" vector-effect="non-scaling-stroke"/><rect x="${x+inset}" y="${y+inset}" width="${Math.max(0,w-2*inset)}" height="${Math.max(0,h-2*inset)}" fill="none" stroke="#66716f" stroke-width="1" vector-effect="non-scaling-stroke"/><text x="${(x+x1)/2}" y="${(y+y1)/2}" text-anchor="middle" dominant-baseline="central" font-size="${Math.max(45,Math.min(105,w/(f.name.length*.8),h*.23))}" fill="#273638">${esc(f.name)}</text></g>`;
+  }).join('');
+}
+
 function renderWalls(){
   $('#gWalls').innerHTML = FloorGeometry.solidRects(state.geometry).map(({rect:w,index:i}) => {
     const [x0,y0,x1,y1,k] = w, id = 'w'+i, dem = state.demolished.includes(id);
@@ -809,7 +819,7 @@ function renderSel(){
 
 function renderAll(){
   syncGeometryArrays(); validateSel();
-  renderGrid(); renderRooms(); renderFurn(); renderWalls(); renderOpenings(); renderDims(); renderLabels(); renderMeasure(); renderSel(); renderPanel(); updateHeader();
+  renderGrid(); renderRooms(); renderFurn(); renderWalls(); renderFacilities(); renderOpenings(); renderDims(); renderLabels(); renderMeasure(); renderSel(); renderPanel(); updateHeader();
   window.View3D?.sync();
 }
 
@@ -1456,7 +1466,7 @@ buildDefs(); buildLib(); renderOpenings(); renderDims();
 $('#tip').textContent = TIPS()['2d'];
 fitView(); renderAll();
 </script>
-<script src="geometry-editor.js?v=3.1.0"></script>
+<script src="geometry-editor.js?v=3.2.0"></script>
 <script src="cloud-sync.js?v=3.0.1"></script>
 <script type="module">
 /* ============================================================
@@ -2242,6 +2252,11 @@ function shapeOf(poly, flip){ const s = new THREE.Shape(); poly.forEach(([x, y],
 function buildArch(){
   clearGroup(archFloor); clearGroup(archUp); lampG.clear(); doors.length = 0; colliders = [];
   const top = opt.cut;
+  (state.geometry.FACILITIES||[]).forEach(f=>{
+    const [x0,y0,x1,y1]=f.rect,h=Math.min(M(f.height),top);
+    archUp.add(box(M(x1-x0),h,M(y1-y0),mat(f.type==='column'?'#8f897d':'#aab5b4',{roughness:.9}),wx((x0+x1)/2),0,wz((y0+y1)/2)));
+    colliders.push([wx(x0),wz(y0),wx(x1),wz(y1)]);
+  });
   ROOMS.forEach(r => {
     const m = floorMat(state.rooms[r.id].mat), bay = r.counted === false;
     const geo = bay ? new THREE.ExtrudeGeometry(shapeOf(r.poly), {depth:.45, bevelEnabled:false}) : new THREE.ShapeGeometry(shapeOf(r.poly));

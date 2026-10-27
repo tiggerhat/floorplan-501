@@ -3,6 +3,15 @@ const assert=require('node:assert/strict');
 const G=require('../geometry-core.js');
 const geometry=()=>G.normalize({WALLS:[[0,0,4000,240,'u']],WINS:[[1000,0,2200,240]],DOORS:[],SLIDES:[],ROOMS:[{id:'room',name:'房间',mat:'tile800',poly:[[0,240],[4000,240],[4000,4000],[0,4000]],at:[2000,2000]}]});
 
+test('building facilities support old plans, movement, resize and removal',()=>{
+ const g=geometry();assert.deepEqual(g.FACILITIES,[]);
+ g.FACILITIES.push({type:'flue',name:'厨房烟道',rect:[100,200,700,700],height:2500});
+ const moved=G.replaceRect(g,'facility',0,[200,300,1000,900]);
+ assert.deepEqual(moved.FACILITIES[0],{type:'flue',name:'厨房烟道',rect:[200,300,1000,900],height:2500});
+ assert.deepEqual(G.remove(moved,'facility',0).FACILITIES,[]);
+ assert.throws(()=>G.normalize({...g,FACILITIES:[{...g.FACILITIES[0],type:'unknown'}]}),/建筑设施/);
+});
+
 test('room edge drag resizes only its two endpoints and follows the edge normal',()=>{
  const g=geometry(),next=G.moveRoomEdge(g,0,1,500,800);
  assert.deepEqual(next.ROOMS[0].poly,[[0,240],[4500,240],[4500,4000],[0,4000]]);

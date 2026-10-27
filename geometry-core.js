@@ -15,6 +15,12 @@
     {id:'floor-window',kind:'window',name:'落地窗',style:'floor',length:2400,thickness:240,sill:0,head:2600,panels:3},
     {id:'bay-window',kind:'window',name:'深窗台窗',style:'bay',length:1800,thickness:600,sill:450,head:2400,panels:3}
   ];
+  const facilityPresets = [
+    {id:'flue',name:'厨房烟道',width:600,depth:500}, {id:'exhaust',name:'卫生间排气道',width:350,depth:350},
+    {id:'plumbing',name:'给排水管井',width:600,depth:400}, {id:'power',name:'强电井',width:500,depth:400},
+    {id:'data',name:'弱电井',width:400,depth:350}, {id:'ventshaft',name:'通风井',width:600,depth:500},
+    {id:'column',name:'结构柱',width:400,depth:400}, {id:'pipebox',name:'包管',width:300,depth:300}
+  ];
   const clone = value => JSON.parse(JSON.stringify(value));
   const finite = n => typeof n === 'number' && Number.isFinite(n) && Math.abs(n) <= 200000;
   const fail = message => { throw new Error(message); };
@@ -44,6 +50,12 @@
   function normalize(input) {
     const g = clone(input);
     if (!g || keys.some(k => !Array.isArray(g[k]) || g[k].length > 2000)) fail('户型缺少墙、窗、门或房间数组，或数量超出上限');
+    if(g.FACILITIES===undefined)g.FACILITIES=[];
+    if(!Array.isArray(g.FACILITIES)||g.FACILITIES.length>2000)fail('建筑设施数据无效或数量超出上限');
+    g.FACILITIES.forEach(f=>{
+      if(!f||!facilityPresets.some(p=>p.id===f.type)||typeof f.name!=='string'||!f.name.trim()||f.name.length>100||!rectangle(f.rect)||!finite(f.height)||f.height<100||f.height>2800)fail('建筑设施类型、名称、坐标或高度无效');
+      f.rect=f.rect.slice(0,4);
+    });
     g.WALLS.forEach(w => { if (!rectangle(w) || !['s','u','b','e','n','low'].includes(w[4])) fail('墙体坐标或类型无效，墙长和墙厚必须大于 0'); });
     g.WINS.forEach(w => { if (!rectangle(w)) fail('窗户坐标无效，窗宽和窗框厚度必须大于 0'); });
     g.DOORS.forEach(d => {
@@ -115,10 +127,11 @@
   }
   function replaceRect(input,kind,index,rect,link=false) {
     if (!rectangle(rect)) fail('长和厚须大于 0');
-    const g=clone(input), key={wall:'WALLS',window:'WINS',door:'DOORS',slide:'SLIDES'}[kind];
+    const g=clone(input), key={wall:'WALLS',window:'WINS',door:'DOORS',slide:'SLIDES',facility:'FACILITIES'}[kind];
     if (!key || !g[key][index]) fail('未找到所选对象');
     if(kind==='door') g.DOORS[index]=resizeDoor(g.DOORS[index],rect);
     else if(kind==='slide')g.SLIDES[index]={...g.SLIDES[index],rect:rect.slice(0,4),v:rect[3]-rect[1]>rect[2]-rect[0]};
+    else if(kind==='facility')g.FACILITIES[index]={...g.FACILITIES[index],rect:rect.slice(0,4)};
     else {
       const old=g[key][index];
       if(kind==='wall' && link) linkRooms(g.ROOMS,old,rect);
@@ -127,7 +140,7 @@
     return normalize(g);
   }
   function remove(input,kind,index) {
-    const g=clone(input),key={wall:'WALLS',window:'WINS',door:'DOORS',slide:'SLIDES',room:'ROOMS'}[kind];
+    const g=normalize(input),key={wall:'WALLS',window:'WINS',door:'DOORS',slide:'SLIDES',room:'ROOMS',facility:'FACILITIES'}[kind];
     if(!key || !g[key][index]) fail('未找到所选对象');
     g[key].splice(index,1); if(kind==='window'){g.windowHeights?.splice(index,1);g.windowStyles?.splice(index,1);}
     return normalize(g);
@@ -175,10 +188,10 @@
     return normalize(g);
   }
   function bounds(g) {
-    const pts=[...g.WALLS,...g.WINS,...g.DOORS.map(d=>d.rect),...g.SLIDES.map(d=>d.rect)].flatMap(r=>[r.slice(0,2),r.slice(2,4)]).concat(g.ROOMS.flatMap(r=>r.poly));
+    const pts=[...g.WALLS,...g.WINS,...g.DOORS.map(d=>d.rect),...g.SLIDES.map(d=>d.rect),...(g.FACILITIES||[]).map(f=>f.rect)].flatMap(r=>[r.slice(0,2),r.slice(2,4)]).concat(g.ROOMS.flatMap(r=>r.poly));
     if(!pts.length)return {x:-2000,y:-2000,w:16000,h:22000};
     const xs=pts.map(p=>p[0]),ys=pts.map(p=>p[1]),x=Math.min(...xs)-2000,y=Math.min(...ys)-1800;
     return {x,y,w:Math.max(5000,Math.max(...xs)-x+2000),h:Math.max(5000,Math.max(...ys)-y+2500)};
   }
-  return {clone,normalize,rectangle,polygon,dimensions,makeRect,moveRect,resizeDoor,replaceRect,remove,insertOpening,openingPresets,subtractRect,solidRects,moveRoomEdge,bounds,keys};
+  return {clone,normalize,rectangle,polygon,dimensions,makeRect,moveRect,resizeDoor,replaceRect,remove,insertOpening,openingPresets,facilityPresets,subtractRect,solidRects,moveRoomEdge,bounds,keys};
 });

@@ -42,11 +42,23 @@ test('cloud: different passwords isolate user JSON and ignore forged user ids',a
  assert.ok(env.PLANS.data.has('plans/'+a.user.id+'.json'));assert.equal(env.PLANS.data.has('plans/'+b.user.id+'.json'),false);
  assert.equal((await call(env,'/api/plan','GET')).status,401);
 });
+test('cloud: building facilities round-trip independently for different users',async()=>{
+ const G=require('../geometry-core.js'),env=environment(),a=await register(env),b=await register(env,passwordB,'用户乙');
+ const first=plan(),second=plan();
+ first.geometry.FACILITIES=G.facilityPresets.map((p,i)=>({type:p.id,name:p.name,rect:[i*1000,0,i*1000+p.width,p.depth],height:2300}));
+ second.geometry.FACILITIES=[{type:'column',name:'柱',rect:[100,100,500,500],height:1800}];
+ assert.equal((await call(env,'/api/plan','PUT',{state:first,baseRevision:null},a.token)).status,200);
+ assert.equal((await call(env,'/api/plan','PUT',{state:second,baseRevision:null},b.token)).status,200);
+ assert.deepEqual((await call(env,'/api/plan','GET',undefined,a.token)).data.state.geometry.FACILITIES,first.geometry.FACILITIES);
+ assert.deepEqual((await call(env,'/api/plan','GET',undefined,b.token)).data.state.geometry.FACILITIES,second.geometry.FACILITIES);
+ const invalid=plan();invalid.geometry.FACILITIES=[{type:'column',name:'柱',rect:[0,0,400,400],height:-1}];
+ assert.equal((await call(env,'/api/plan','PUT',{state:invalid,baseRevision:null},a.token)).status,400);
+});
 test('cloud: concurrent saves reject stale versions instead of overwriting',async()=>{
  const env=environment(),{token}=await register(env),first=await call(env,'/api/plan','PUT',{state:plan(),baseRevision:null},token);
  const results=await Promise.all([5000,6000].map(x=>call(env,'/api/plan','PUT',{state:plan(x),baseRevision:first.data.revision},token)));
  assert.deepEqual(results.map(x=>x.status).sort(),[200,409]);
- const current=await call(env,'/api/plan','GET',undefined,token);assert.equal(current.data.state.geometry.WALLS[0][2],5000);
+ const current=await call(env,'/api/plan','GET',undefined,token);assert.equal(current.data.state.geometry.WALLS[0][2],[5000,6000][results.findIndex(r=>r.status===200)]);
  assert.equal((await call(env,'/api/plan','PUT',{state:plan(),baseRevision:null},token)).status,409);
 });
 test('cloud: invalid geometry, missing revision and oversized input leave saved data untouched',async()=>{

@@ -1,8 +1,8 @@
 /* Browser interaction layer for the 501 floor-plan editor. */
 (() => {
   'use strict';
-  const G=FloorGeometry, key={wall:'WALLS',window:'WINS',door:'DOORS',slide:'SLIDES',room:'ROOMS'};
-  const names={wall:'墙体',window:'窗户',door:'平开门',slide:'推拉门',room:'房间'};
+  const G=FloorGeometry, key={wall:'WALLS',window:'WINS',door:'DOORS',slide:'SLIDES',room:'ROOMS',facility:'FACILITIES'};
+  const names={wall:'墙体',window:'窗户',door:'平开门',slide:'推拉门',room:'房间',facility:'建筑设施'};
   let mode='select', gesture=null, linkRoomFaces=false, presetId=null;
   let formTimer=null,pendingForm=null,preservingForm=null;
   const saveCompletedEdit=()=>window.CloudSync?.flush().catch(()=>{});
@@ -13,12 +13,13 @@
     return null;
   }
   function valueOf(sel,g=state.geometry){return sel && g[key[sel.kind]]?.[sel.index];}
-  function rectOf(sel,g=state.geometry){const o=valueOf(sel,g);return !o?null:sel.kind==='door'||sel.kind==='slide'?o.rect:sel.kind==='room'?bbox(o.poly):o;}
+  function rectOf(sel,g=state.geometry){const o=valueOf(sel,g);return !o?null:['door','slide','facility'].includes(sel.kind)?o.rect:sel.kind==='room'?bbox(o.poly):o;}
   function windowName(i){const style=state.geometry.windowStyles[i]?.style;return G.openingPresets.find(p=>p.style===style)?.name||'窗户';}
   function palette(){
     const icons={door:'M6 27V5h22v22M8 25V7L24 13V27Z',slide:'M3 7h26v20H3ZM16 7v20M7 17h6m-3-3 3 3-3 3M19 17h6m-3-3 3 3-3 3',window:'M4 5h24v23H4ZM16 5v23M4 17h24'};
     return `<div class="opening-palette" aria-label="门窗组件">${G.openingPresets.map(p=>`<button type="button" class="opening-component ${presetId===p.id?'on':''}" data-opening-preset="${p.id}" aria-pressed="${presetId===p.id}"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="${icons[p.kind]||icons.window}"/></svg><span>${p.name}<small>${p.length} × ${p.height||p.head-p.sill} mm</small></span></button>`).join('')}</div>`;
   }
+  function facilityPalette(){return `<div class="opening-palette" aria-label="建筑设施">${G.facilityPresets.map(p=>`<button type="button" class="opening-component ${presetId===p.id?'on':''}" data-facility-preset="${p.id}"><span>${p.name}<small>${p.width} × ${p.depth} mm</small></span></button>`).join('')}</div>`;}
   function pick(kind,index){
     select({kind:'geometry',geoKind:kind,index});
     if(!narrow())drawer('panel',true);
@@ -32,7 +33,7 @@
   }
   function options(sel){
     return Object.entries(key).flatMap(([kind,k])=>state.geometry[k].map((o,i)=>{
-      const label=kind==='room'?(state.rooms[o.id]?.name||o.name):kind==='door'||kind==='slide'?`${o.name} ${i+1}`:`${kind==='window'?windowName(i):names[kind]} ${String(i+1).padStart(2,'0')}`;
+      const label=kind==='room'?(state.rooms[o.id]?.name||o.name):['door','slide','facility'].includes(kind)?`${o.name} ${i+1}`:`${kind==='window'?windowName(i):names[kind]} ${String(i+1).padStart(2,'0')}`;
       return `<option value="${kind}:${i}" ${sel?.kind===kind&&sel.index===i?'selected':''}>${esc(label)}</option>`;
     })).join('');
   }
@@ -41,7 +42,7 @@
     if(ui.tool!=='geometry')return false;
     if(preservingForm&&panel.contains(preservingForm))return true;
     const sel=current(),obj=valueOf(sel);
-    let content=`<section><details id="openingLibrary" ${obj?'':'open'}><summary>门窗组件 · 7 种</summary>${palette()}<p class="geometry-help">选组件后在画布单击放置，拖动可自定宽度；从墙上起笔自动贴墙。深窗台预设是单面窗，转角可用多窗拼接。</p></details></section><section><h3>编辑户型 <small>单位 mm</small></h3>
+    let content=`<section><details id="openingLibrary" ${obj?'':'open'}><summary>门窗组件 · 7 种</summary>${palette()}<p class="geometry-help">选组件后在画布单击放置，拖动可自定宽度；从墙上起笔自动贴墙。深窗台预设是单面窗，转角可用多窗拼接。</p></details><details id="facilityLibrary"><summary>建筑设施 · 8 种</summary>${facilityPalette()}<p class="geometry-help">选择设施后在画布单击放置，或拖动绘制占地范围。</p></details></section><section><h3>编辑户型 <small>单位 mm</small></h3>
       <label for="geometryPicker">选择对象</label><select id="geometryPicker" class="geometry-picker"><option value="">请选择墙、窗、门或房间</option>${options(sel)}</select>
       <div class="geometry-count">${WALLS.length} 段墙 · ${WINS.length} 扇窗 · ${DOORS.length} 平开门 · ${SLIDES.length} 推拉门</div></section>`;
     if(obj){
@@ -50,6 +51,9 @@
           <p class="full geometry-help">拖动橙色边线或中点调整房间大小，拖动圆形顶点调整形状。面积实时更新，松手自动保存。</p>
           <details class="full"><summary>精确坐标（可选）</summary><label>顶点坐标：每行 X, Y<textarea name="points" spellcheck="false" required>${obj.poly.map(p=>p.join(', ')).join('\n')}</textarea></label></details>
           <div class="actions full"><button class="btn danger" type="button" id="geometryDelete">删除房间</button></div><p class="full geometry-help" id="geometryAutoStatus" role="status">修改后自动应用并保存</p></form></section>`;
+      }else if(sel.kind==='facility'){
+        const [x,y,x1,y1]=obj.rect;
+        content+=`<section><h3>建筑设施</h3><form id="geometryForm" class="geometry-form"><label class="full">名称<input name="name" value="${esc(obj.name)}" maxlength="100" required></label>${field('width','宽',x1-x,50,50000)}${field('depth','深',y1-y,50,50000)}${field('x','左上角 X',x,-200000,200000)}${field('y','左上角 Y',y,-200000,200000)}${field('height','高度',obj.height,100,2800)}<div class="actions full"><button class="btn" type="button" id="geometryDuplicate">复制</button><button class="btn danger" type="button" id="geometryDelete">删除</button></div><p class="full geometry-help" id="geometryAutoStatus" role="status">修改后自动应用并保存</p></form></section>`;
       }else{
         const r=rectOf(sel),d=G.dimensions(r),h=state.geometry.windowHeights[sel.index];
         content+=`<section><h3>${sel.kind==='window'?windowName(sel.index):names[sel.kind]} ${String(sel.index+1).padStart(2,'0')}</h3><form id="geometryForm" class="geometry-form">
@@ -71,6 +75,7 @@
     content+=`<section><p id="geometryError" class="geometry-error" role="alert"></p><div class="actions"><button class="btn" id="geometryExport">导出户型备份</button><button class="btn" id="geometryImport">导入方案</button></div><p class="geometry-help">${window.FLOORPLAN_CLOUD?.enabled?'修改自动保存到当前用户的云端空间，也可导出 JSON 备份。':'修改自动保存在此浏览器。跨设备请导出 JSON。'}编辑的是数字模型，墙体性质仍待核验。</p><button class="btn" id="geometryDone">退出户型编辑</button></section>`;
     panel.innerHTML=content;
     panel.querySelectorAll('[data-opening-preset]').forEach(b=>b.onclick=()=>{const p=G.openingPresets.find(p=>p.id===b.dataset.openingPreset);setMode(p.kind,p.id);closeDrawers();});
+    panel.querySelectorAll('[data-facility-preset]').forEach(b=>b.onclick=()=>{setMode('facility',b.dataset.facilityPreset);closeDrawers();});
     $('#geometryPicker').onchange=e=>{flushForm();if(!e.target.value){ui.sel=null;renderAll();return;}const [kind,i]=e.target.value.split(':');pick(kind,+i);};
     $('#geometryExport').onclick=()=>$('#exportJson').click();
     $('#geometryImport').onclick=()=>$('#importJson').click();
@@ -115,6 +120,9 @@
         r.poly=points;r.name=String(fields.get('name')).trim()||r.name;
         r.at=[points.reduce((s,p)=>s+p[0],0)/points.length,points.reduce((s,p)=>s+p[1],0)/points.length];
         return change(g,()=>state.rooms[r.id].name=r.name);
+      }else if(sel.kind==='facility'){
+        const f=g.FACILITIES[sel.index],x=get('x'),y=get('y'),w=get('width'),d=get('depth');
+        f.name=String(fields.get('name')).trim();f.rect=[x,y,x+w,y+d];f.height=get('height');return change(g);
       }else{
         const rect=G.makeRect({x:get('x'),y:get('y'),length:get('length'),thickness:get('thickness'),vertical:fields.get('direction')==='v'});
         linkRoomFaces=fields.has('link');
@@ -140,7 +148,7 @@
   function duplicate(){
     const sel=current();if(!sel||sel.kind==='room')return;
     const g=G.clone(state.geometry),r=G.moveRect(rectOf(sel),400,400),obj=valueOf(sel,g);
-    g[key[sel.kind]].push(sel.kind==='door'?G.resizeDoor(obj,r):sel.kind==='slide'?{...obj,rect:r.slice(0,4)}:r.slice(0,4).concat(obj.slice(4)));
+    g[key[sel.kind]].push(sel.kind==='door'?G.resizeDoor(obj,r):['slide','facility'].includes(sel.kind)?{...obj,rect:r.slice(0,4)}:r.slice(0,4).concat(obj.slice(4)));
     if(sel.kind==='window'){g.windowHeights.push(G.clone(g.windowHeights[sel.index]));g.windowStyles.push(G.clone(g.windowStyles[sel.index]));}
     change(g,()=>ui.sel={kind:'geometry',geoKind:sel.kind,index:g[key[sel.kind]].length-1});
   }
@@ -167,7 +175,7 @@
   function setMode(next,preset=null){
     mode=next;presetId=preset||(next==='window'?'casement':next==='door'?'door':next==='slide'?'slide':null);
     document.querySelectorAll('[data-geommode]').forEach(b=>b.classList.toggle('on',b.dataset.geommode===next));
-    const p=G.openingPresets.find(p=>p.id===presetId);
+    const p=[...G.openingPresets,...G.facilityPresets].find(p=>p.id===presetId);
     $('#modehint').textContent=next==='select'?'点选对象改尺寸；拖动橙色端点伸缩':p?'单击放置'+p.name+'，或按住拖动自定宽度；Esc 取消':'按住拖动绘制'+names[next]+'，松开完成';
     renderPanel();
   }
@@ -176,8 +184,8 @@
     if(ui.tool!=='geometry'){overlay.innerHTML='';return;}
     const k=1/view.s;
     let s='';
-    for(const kind of ['wall','window','door','slide'])state.geometry[key[kind]].forEach((obj,index)=>{
-      const r=kind==='door'||kind==='slide'?obj.rect:obj;
+    for(const kind of ['wall','window','door','slide','facility'])state.geometry[key[kind]].forEach((obj,index)=>{
+      const r=['door','slide','facility'].includes(kind)?obj.rect:obj;
       s+=`<rect class="geo-hit" data-geokind="${kind}" data-index="${index}" x="${r[0]}" y="${r[1]}" width="${r[2]-r[0]}" height="${r[3]-r[1]}" fill="transparent" stroke="transparent" stroke-width="${Math.max(6*k,30)}" pointer-events="all"/>`;
       if(kind==='door'){
         // 门扇和开启弧线可能远离门洞；热区随门的铰链、方向及宽度一起移动。
@@ -210,6 +218,7 @@
     overlay.innerHTML=s;
   }
   function draftRect(start,p){
+    if(mode==='facility')return [Math.min(start.x,p.x),Math.min(start.y,p.y),Math.max(start.x,p.x),Math.max(start.y,p.y)];
     const preset=G.openingPresets.find(item=>item.id===presetId);let vertical=Math.abs(p.y-start.y)>Math.abs(p.x-start.x),thickness=preset?.thickness||240;
     if(gesture.host){const d=G.dimensions(gesture.host);vertical=d.vertical;thickness=preset?.style==='bay'?Math.max(thickness,d.thickness):d.thickness;}
     if(mode==='room')return [Math.min(start.x,p.x),Math.min(start.y,p.y),Math.max(start.x,p.x),Math.max(start.y,p.y)];
@@ -267,7 +276,9 @@
     if(e.type==='pointercancel'){cancelGesture();return;}
     gesture=null;
     if(d.type==='draw'){
-      if(!d.moved&&presetId){
+      if(!d.moved&&mode==='facility'&&presetId){
+        const preset=G.facilityPresets.find(p=>p.id===presetId);d.draft=[d.start.x,d.start.y,d.start.x+preset.width,d.start.y+preset.depth];
+      }else if(!d.moved&&presetId){
         const preset=G.openingPresets.find(p=>p.id===presetId),vertical=d.host?G.dimensions(d.host).vertical:false;
         const thickness=preset.style==='bay'?Math.max(preset.thickness,d.host?G.dimensions(d.host).thickness:0):d.host?G.dimensions(d.host).thickness:preset.thickness;
         const x=vertical&&d.host?d.host[0]:d.start.x,y=!vertical&&d.host?d.host[1]:d.start.y;
@@ -277,6 +288,7 @@
         try{
           const r=d.draft;let g=G.clone(state.geometry),index;
           if(mode==='wall'){index=g.WALLS.push([...r,'u'])-1;}
+          else if(mode==='facility'){const preset=G.facilityPresets.find(p=>p.id===presetId);index=g.FACILITIES.push({type:preset.id,name:preset.name,rect:r,height:2800})-1;}
           else if(['window','door','slide'].includes(mode)){
             index=g[key[mode]].length;g=G.insertOpening(g,presetId,r);
           }else{
@@ -311,6 +323,7 @@
   },true);
   document.querySelectorAll('[data-geommode]').forEach(b=>b.onclick=()=>setMode(b.dataset.geommode));
   $('#showOpeningLibrary').onclick=()=>{setMode('select');drawer('panel',true);$('#openingLibrary').open=true;$('aside.right').scrollTop=0;};
+  $('#showFacilityLibrary').onclick=()=>{setMode('select');drawer('panel',true);$('#facilityLibrary').open=true;$('aside.right').scrollTop=0;};
   window.GeometryEditor={renderPanel:renderGeometryPanel,renderSelection,toolChanged};
   renderAll();
 })();
