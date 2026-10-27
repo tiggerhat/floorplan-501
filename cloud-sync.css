@@ -1,0 +1,16 @@
+.cloud-locked .app{visibility:hidden}
+.cloud-locked #geometryNotice,.cloud-locked #cloudSaveAlert{display:none}
+#cloudLogin{border:1px solid var(--line);border-radius:12px;padding:28px;width:min(420px,calc(100vw - 28px));max-height:calc(100dvh - 30px);background:var(--panel);color:var(--ink);overflow:auto}
+#cloudLogin::backdrop{background:#ece8e0}
+#cloudLogin form{display:grid;gap:14px}
+#cloudLogin h2{font-size:21px;margin:0}#cloudLogin p{margin:0;font-size:13px;line-height:1.65;color:#63594c}
+#cloudLogin label{display:grid;gap:5px;font-size:13px}
+#cloudLogin input{width:100%;padding:10px;border:1px solid var(--line);border-radius:6px;background:#fff;font-size:16px;user-select:text}
+#cloudLogin .btn{min-height:42px}#cloudLogin #cloudLoginError{color:#a52e23;min-height:20px}
+#cloudLogin .cloud-caption{font-size:12px}#cloudLogin button:disabled{opacity:.6;cursor:wait}
+#cloudAccount{max-width:100%;flex-wrap:wrap;padding-inline:8px;gap:5px}
+#cloudUser{font-weight:600;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#cloudStatus{color:#2f5d62;font-size:12px}#cloudStatus[data-error=true]{color:#a52e23}
+#cloudSaveAlert{position:fixed;bottom:70px;left:50%;transform:translateX(-50%);z-index:20;width:min(660px,calc(100vw - 24px));background:var(--panel);padding:12px;border:1px solid #b59358;border-radius:8px;font-size:13px}
+#cloudSaveAlert span{display:block;margin-bottom:8px;color:#a52e23}#cloudSaveAlert .btn{border:1px solid var(--line);min-height:36px;margin:2px}
+@media(max-width:600px){#cloudAccount{width:100%;font-size:12px}#cloudAccount .btn{min-height:36px;padding:6px 8px}#cloudLogin{padding:22px}}

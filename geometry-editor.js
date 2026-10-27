@@ -65,7 +65,7 @@
           </form><p class="geometry-help">墙与窗的位置可独立调整。房间边界可单独编辑；新门窗与墙相交时自动留洞。</p></section>`;
       }
     }else content+=`<section><h3>从上方工具开始</h3><p class="geometry-help">「画墙」「画窗」「画门」沿水平或垂直方向绘制。「画房间」拖出矩形，之后可编辑任意顶点。</p><p class="geometry-help">窗和门从已有墙上起笔时，自动匹配墙的方向与厚度。</p></section>`;
-    content+=`<section><p id="geometryError" class="geometry-error" role="alert"></p><div class="actions"><button class="btn" id="geometryExport">导出户型备份</button><button class="btn" id="geometryImport">导入方案</button></div><p class="geometry-help">修改自动保存在此浏览器。跨设备请导出 JSON。编辑的是数字模型，墙体性质仍待核验。</p><button class="btn" id="geometryDone">退出户型编辑</button></section>`;
+    content+=`<section><p id="geometryError" class="geometry-error" role="alert"></p><div class="actions"><button class="btn" id="geometryExport">导出户型备份</button><button class="btn" id="geometryImport">导入方案</button></div><p class="geometry-help">${window.FLOORPLAN_CLOUD?.enabled?'修改自动保存到当前用户的云端空间，也可导出 JSON 备份。':'修改自动保存在此浏览器。跨设备请导出 JSON。'}编辑的是数字模型，墙体性质仍待核验。</p><button class="btn" id="geometryDone">退出户型编辑</button></section>`;
     panel.innerHTML=content;
     panel.querySelectorAll('[data-opening-preset]').forEach(b=>b.onclick=()=>{const p=G.openingPresets.find(p=>p.id===b.dataset.openingPreset);setMode(p.kind,p.id);closeDrawers();});
     $('#geometryPicker').onchange=e=>{if(!e.target.value){ui.sel=null;renderAll();return;}const [kind,i]=e.target.value.split(':');pick(kind,+i);};

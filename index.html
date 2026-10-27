@@ -10,6 +10,8 @@
 <title>501 户型编辑器</title>
 <link rel="stylesheet" href="geometry-editor.css?v=2.1.0">
 <script src="geometry-core.js?v=2.1.0"></script>
+<link rel="stylesheet" href="cloud-sync.css?v=3.0.0">
+<script src="cloud-config.js?v=3.0.0"></script>
 <style>
 :root{
   --bg:#f3efe7; --paper:#f7f4ee; --panel:#fffdf9; --line:#e3dccf; --ink:#2b2824; --muted:#8a8174;
@@ -466,6 +468,7 @@ function defaultState(){
 
 const STORE = '501-editable-v2';
 function load(){
+  if(window.FLOORPLAN_CLOUD?.enabled)return null;
   try { const s = JSON.parse(localStorage.getItem(STORE)||localStorage.getItem('501-geometry-v1-20261026')); if (s && Array.isArray(s.furniture)) return fixState(s); } catch(e) {}
   return null;
 }
@@ -495,7 +498,10 @@ const ui = {tool:'select', sel:null, mA:null, mCur:null,
 let view = {x0:0, y0:0, s:.06};
 const undoStack = [], redoStack = [];
 
-function save(){ try { localStorage.setItem(STORE, JSON.stringify(state)); } catch(e) { toast('本机存储空间不足或不可用，请导出 JSON 备份'); } }
+function save(){
+  if(window.FLOORPLAN_CLOUD?.enabled){window.CloudSync?.changed();return;}
+  try { localStorage.setItem(STORE, JSON.stringify(state)); } catch(e) { toast('本机存储空间不足或不可用，请导出 JSON 备份'); }
+}
 const snap = () => JSON.stringify(state);
 function commit(before){ undoStack.push(before); if (undoStack.length > 150) undoStack.shift(); redoStack.length = 0; save(); }
 function mutate(fn){ const b = snap(); fn(); commit(b); renderAll(); }
@@ -1450,7 +1456,8 @@ buildDefs(); buildLib(); renderOpenings(); renderDims();
 $('#tip').textContent = TIPS()['2d'];
 fitView(); renderAll();
 </script>
-<script src="geometry-editor.js?v=2.1.0"></script>
+<script src="geometry-editor.js?v=3.0.0"></script>
+<script src="cloud-sync.js?v=3.0.0"></script>
 <script type="module">
 /* ============================================================
  *  3D 场景（three.js）—— 与 2D 共用 state / ui，切换时带过渡动画：

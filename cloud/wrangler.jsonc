@@ -1,0 +1,14 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "floorplan-501-api",
+  "account_id": "c6d20633c6aade326af631d06c575326",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-10-26",
+  "workers_dev": true,
+  "kv_namespaces": [{"binding":"JSON_DATA","id":"49768cda21a84654a6ae6706e5045bd4"}],
+  "durable_objects": {"bindings":[{"name":"COORDINATOR","class_name":"WorkspaceCoordinator"}]},
+  "migrations": [{"tag":"v1","new_sqlite_classes":["WorkspaceCoordinator"]}],
+  "vars": {"ALLOWED_ORIGINS":"https://tiggerhat.github.io"},
+  "ratelimits": [{"name":"AUTH_LIMITER","namespace_id":"501001","simple":{"limit":10,"period":60}}],
+  "observability": {"enabled":false}
+}

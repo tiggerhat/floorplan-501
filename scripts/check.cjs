@@ -1,6 +1,6 @@
 const fs=require('node:fs'),path=require('node:path'),{spawnSync}=require('node:child_process');
 const root=path.resolve(__dirname,'..'),html=fs.readFileSync(path.join(root,'index.html'),'utf8');
-for(const file of ['geometry-core.js','geometry-editor.js']){
+for(const file of ['geometry-core.js','geometry-editor.js','cloud-config.js','cloud-sync.js','cloud/worker.mjs','cloud/kv-store.mjs','scripts/dev-cloud.cjs']){
  const r=spawnSync(process.execPath,['--check',path.join(root,file)],{encoding:'utf8'});
  if(r.status!==0)throw Error(r.stderr);
 }
