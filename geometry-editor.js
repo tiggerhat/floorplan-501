@@ -310,7 +310,7 @@
     if(e.target.matches('input,textarea,select')||is3D())return;
     if(e.key.toLowerCase()==='e'&&!e.metaKey&&!e.ctrlKey){e.preventDefault();e.stopImmediatePropagation();setTool(ui.tool==='geometry'?'select':'geometry');return;}
     if(ui.tool!=='geometry')return;
-    if(e.key==='Escape'){cancelGesture();setMode('select');return;}
+    if(e.key==='Escape'){e.preventDefault();e.stopImmediatePropagation();cancelGesture();setMode('select');return;}
     if((e.key==='Delete'||e.key==='Backspace')&&current()){e.preventDefault();e.stopImmediatePropagation();removeSelected();}
     if(e.key.startsWith('Arrow')&&current()){
       e.preventDefault();e.stopImmediatePropagation();
