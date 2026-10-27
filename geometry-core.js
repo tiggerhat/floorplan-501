@@ -162,11 +162,23 @@
     });
     return result;
   }
+  function moveRoomEdge(input,index,edge,dx,dy) {
+    const g=clone(input),room=g.ROOMS[index],poly=room?.poly;
+    if(!poly||!Number.isInteger(edge)||edge<0||edge>=poly.length)fail('房间边界不存在');
+    const next=(edge+1)%poly.length,a=poly[edge],b=poly[next],nx=-(b[1]-a[1]),ny=b[0]-a[0];
+    const amount=(dx*nx+dy*ny)/(nx*nx+ny*ny),mx=Math.round(amount*nx),my=Math.round(amount*ny);
+    const signed=points=>points.reduce((s,p,i)=>{const q=points[(i+1)%points.length];return s+p[0]*q[1]-q[0]*p[1];},0);
+    const before=signed(poly);
+    room.poly=poly.map((p,i)=>i===edge||i===next?[p[0]+mx,p[1]+my]:p);
+    if(before*signed(room.poly)<=0)fail('房间边界不能越过对侧边界');
+    room.at=[0,1].map(axis=>room.poly.reduce((s,p)=>s+p[axis],0)/poly.length);
+    return normalize(g);
+  }
   function bounds(g) {
     const pts=[...g.WALLS,...g.WINS,...g.DOORS.map(d=>d.rect),...g.SLIDES.map(d=>d.rect)].flatMap(r=>[r.slice(0,2),r.slice(2,4)]).concat(g.ROOMS.flatMap(r=>r.poly));
     if(!pts.length)return {x:-2000,y:-2000,w:16000,h:22000};
     const xs=pts.map(p=>p[0]),ys=pts.map(p=>p[1]),x=Math.min(...xs)-2000,y=Math.min(...ys)-1800;
     return {x,y,w:Math.max(5000,Math.max(...xs)-x+2000),h:Math.max(5000,Math.max(...ys)-y+2500)};
   }
-  return {clone,normalize,rectangle,polygon,dimensions,makeRect,moveRect,resizeDoor,replaceRect,remove,insertOpening,openingPresets,subtractRect,solidRects,bounds,keys};
+  return {clone,normalize,rectangle,polygon,dimensions,makeRect,moveRect,resizeDoor,replaceRect,remove,insertOpening,openingPresets,subtractRect,solidRects,moveRoomEdge,bounds,keys};
 });

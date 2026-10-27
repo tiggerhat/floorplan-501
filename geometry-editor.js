@@ -4,6 +4,8 @@
   const G=FloorGeometry, key={wall:'WALLS',window:'WINS',door:'DOORS',slide:'SLIDES',room:'ROOMS'};
   const names={wall:'墙体',window:'窗户',door:'平开门',slide:'推拉门',room:'房间'};
   let mode='select', gesture=null, linkRoomFaces=false, presetId=null;
+  let formTimer=null,pendingForm=null,preservingForm=null;
+  const saveCompletedEdit=()=>window.CloudSync?.flush().catch(()=>{});
   const round=n=>Math.round(n/10)*10;
   function current(){
     if(ui.sel?.kind==='geometry') return {kind:ui.sel.geoKind,index:ui.sel.index};
@@ -25,7 +27,7 @@
   function change(geometry,fn){
     try {
       const next=fixState({...state,geometry}),before=snap();
-      state=next;if(fn)fn();commit(before);renderAll();return true;
+      state=next;if(fn)fn();if(snap()!==before){commit(before);saveCompletedEdit();}renderAll();return true;
     }catch(e){error(e.message);return false;}
   }
   function options(sel){
@@ -37,16 +39,17 @@
   function field(name,label,val,min,max){return `<label>${label}<input name="${name}" type="number" value="${val}" step="1" ${min!==undefined?`min="${min}"`:''} ${max!==undefined?`max="${max}"`:''} required></label>`;}
   function renderGeometryPanel(panel){
     if(ui.tool!=='geometry')return false;
+    if(preservingForm&&panel.contains(preservingForm))return true;
     const sel=current(),obj=valueOf(sel);
     let content=`<section><details id="openingLibrary" ${obj?'':'open'}><summary>门窗组件 · 7 种</summary>${palette()}<p class="geometry-help">选组件后在画布单击放置，拖动可自定宽度；从墙上起笔自动贴墙。深窗台预设是单面窗，转角可用多窗拼接。</p></details></section><section><h3>编辑户型 <small>单位 mm</small></h3>
       <label for="geometryPicker">选择对象</label><select id="geometryPicker" class="geometry-picker"><option value="">请选择墙、窗、门或房间</option>${options(sel)}</select>
       <div class="geometry-count">${WALLS.length} 段墙 · ${WINS.length} 扇窗 · ${DOORS.length} 平开门 · ${SLIDES.length} 推拉门</div></section>`;
     if(obj){
       if(sel.kind==='room'){
-        content+=`<section><h3>房间边界</h3><form id="geometryForm" class="geometry-form"><label class="full">房间名称<input name="name" value="${esc(state.rooms[obj.id]?.name||obj.name)}" maxlength="80" required></label>
-          <label class="full">顶点坐标：每行 X, Y<textarea name="points" spellcheck="false" required>${obj.poly.map(p=>p.join(', ')).join('\n')}</textarea></label>
-          <p class="full geometry-help">也可拖动画布上的顶点。边界不可交叉；面积由此边界计算。</p>
-          <div class="actions full"><button class="btn primary" type="submit">应用边界</button><button class="btn danger" type="button" id="geometryDelete">删除房间</button></div></form></section>`;
+        content+=`<section><h3>房间边界 · ${fmt(area(obj.poly))} m²</h3><form id="geometryForm" class="geometry-form"><label class="full">房间名称<input name="name" value="${esc(state.rooms[obj.id]?.name||obj.name)}" maxlength="80" required></label>
+          <p class="full geometry-help">拖动橙色边线或中点调整房间大小，拖动圆形顶点调整形状。面积实时更新，松手自动保存。</p>
+          <details class="full"><summary>精确坐标（可选）</summary><label>顶点坐标：每行 X, Y<textarea name="points" spellcheck="false" required>${obj.poly.map(p=>p.join(', ')).join('\n')}</textarea></label></details>
+          <div class="actions full"><button class="btn danger" type="button" id="geometryDelete">删除房间</button></div><p class="full geometry-help" id="geometryAutoStatus" role="status">修改后自动应用并保存</p></form></section>`;
       }else{
         const r=rectOf(sel),d=G.dimensions(r),h=state.geometry.windowHeights[sel.index];
         content+=`<section><h3>${sel.kind==='window'?windowName(sel.index):names[sel.kind]} ${String(sel.index+1).padStart(2,'0')}</h3><form id="geometryForm" class="geometry-form">
@@ -59,7 +62,7 @@
           ${sel.kind==='slide'?`${field('height','门高',obj.height,100,2800)}<label>门扇数<select name="panels">${[2,3,4].map(n=>`<option ${obj.panels===n?'selected':''}>${n}</option>`).join('')}</select></label>`:''}
           ${sel.kind==='wall'?`<label class="full">墙段标识<select name="wallType"><option value="u" ${obj[4]!=='s'?'selected':''}>一般墙段 · 性质待核</option><option value="s" ${obj[4]==='s'?'selected':''}>原图深色 / 疑似结构段 · 待核</option></select></label>
             <label class="full check"><input type="checkbox" name="link" ${linkRoomFaces?'checked':''}>侧移时联动同线房间边界</label>`:''}
-          <div class="actions full"><button class="btn primary" type="submit">应用尺寸</button><button class="btn" type="button" id="geometryDuplicate">复制</button><button class="btn danger" type="button" id="geometryDelete">删除</button></div>
+          <div class="actions full"><button class="btn" type="button" id="geometryDuplicate">复制</button><button class="btn danger" type="button" id="geometryDelete">删除</button></div><p class="full geometry-help" id="geometryAutoStatus" role="status">修改后自动应用并保存</p>
           ${sel.kind==='door'?'<div class="actions full"><button class="btn" type="button" id="doorHinge">换铰链侧</button><button class="btn" type="button" id="doorSwing">反向开启</button></div>':''}
           ${sel.kind==='window'||sel.kind==='door'||sel.kind==='slide'?'<div class="actions full"><button class="btn" type="button" id="geometryAttach">贴合附近墙体</button></div>':''}
           </form><p class="geometry-help">墙与窗的位置可独立调整。房间边界可单独编辑；新门窗与墙相交时自动留洞。</p></section>`;
@@ -68,12 +71,16 @@
     content+=`<section><p id="geometryError" class="geometry-error" role="alert"></p><div class="actions"><button class="btn" id="geometryExport">导出户型备份</button><button class="btn" id="geometryImport">导入方案</button></div><p class="geometry-help">${window.FLOORPLAN_CLOUD?.enabled?'修改自动保存到当前用户的云端空间，也可导出 JSON 备份。':'修改自动保存在此浏览器。跨设备请导出 JSON。'}编辑的是数字模型，墙体性质仍待核验。</p><button class="btn" id="geometryDone">退出户型编辑</button></section>`;
     panel.innerHTML=content;
     panel.querySelectorAll('[data-opening-preset]').forEach(b=>b.onclick=()=>{const p=G.openingPresets.find(p=>p.id===b.dataset.openingPreset);setMode(p.kind,p.id);closeDrawers();});
-    $('#geometryPicker').onchange=e=>{if(!e.target.value){ui.sel=null;renderAll();return;}const [kind,i]=e.target.value.split(':');pick(kind,+i);};
+    $('#geometryPicker').onchange=e=>{flushForm();if(!e.target.value){ui.sel=null;renderAll();return;}const [kind,i]=e.target.value.split(':');pick(kind,+i);};
     $('#geometryExport').onclick=()=>$('#exportJson').click();
     $('#geometryImport').onclick=()=>$('#importJson').click();
     $('#geometryDone').onclick=()=>{select(null);setTool('select');};
     if(obj){
-      $('#geometryForm').onsubmit=e=>{e.preventDefault();applyForm(sel,e.target);};
+      const form=$('#geometryForm');
+      const schedule=()=>{pendingForm={sel,form};clearTimeout(formTimer);$('#geometryAutoStatus').textContent='输入完成后自动保存…';formTimer=setTimeout(flushForm,650);};
+      form.oninput=schedule;
+      form.onchange=()=>{pendingForm={sel,form};flushForm();};
+      form.onsubmit=e=>{e.preventDefault();pendingForm={sel,form};flushForm();};
       $('#geometryDelete').onclick=removeSelected;
       if($('#geometryDuplicate'))$('#geometryDuplicate').onclick=duplicate;
       if($('#geometryAttach'))$('#geometryAttach').onclick=attach;
@@ -85,6 +92,18 @@
     }
     return true;
   }
+  function flushForm(){
+    clearTimeout(formTimer);const pending=pendingForm;pendingForm=null;
+    if(!pending||!pending.form.isConnected)return;
+    const sel=current();if(sel?.kind!==pending.sel.kind||sel.index!==pending.sel.index)return;
+    if(!pending.form.checkValidity()){error('请填写有效数值；本次输入尚未应用。');$('#geometryAutoStatus').textContent='输入有误，尚未应用';return;}
+    preservingForm=pending.form;
+    try{const ok=applyForm(pending.sel,pending.form);$('#geometryAutoStatus').textContent=ok?(window.CloudSync?.enabled?'已应用，云端保存状态见顶部':'已自动保存到此浏览器'):'输入有误，尚未应用';if(ok)error('');}
+    finally{preservingForm=null;}
+  }
+  // 在切换对象或执行按钮操作之前提交输入，避免延迟任务写入新选中的对象。
+  document.addEventListener('pointerdown',e=>{if(pendingForm&&(!pendingForm.form.contains(e.target)||e.target.closest('button')))flushForm();},true);
+  window.addEventListener('beforeunload',flushForm);
   function applyForm(sel,form){
     try{
       const fields=new FormData(form),get=k=>Number(fields.get(k));
@@ -95,7 +114,7 @@
         const points=lines.map(line=>line.split(/[,，]/).map(Number)),r=g.ROOMS[sel.index];
         r.poly=points;r.name=String(fields.get('name')).trim()||r.name;
         r.at=[points.reduce((s,p)=>s+p[0],0)/points.length,points.reduce((s,p)=>s+p[1],0)/points.length];
-        change(g,()=>state.rooms[r.id].name=r.name);
+        return change(g,()=>state.rooms[r.id].name=r.name);
       }else{
         const rect=G.makeRect({x:get('x'),y:get('y'),length:get('length'),thickness:get('thickness'),vertical:fields.get('direction')==='v'});
         linkRoomFaces=fields.has('link');
@@ -104,9 +123,9 @@
         if(sel.kind==='window')g.windowHeights[sel.index]={sill:get('sill'),head:get('sill')+get('height')};
         if(sel.kind==='window')g.windowStyles[sel.index]={style:fields.get('windowStyle'),panels:get('panels')};
         if(sel.kind==='slide'){g.SLIDES[sel.index].height=get('height');g.SLIDES[sel.index].panels=get('panels');}
-        change(g);
+        return change(g);
       }
-    }catch(e){error(e.message);}
+    }catch(e){error(e.message);return false;}
   }
   function removeSelected(){
     const sel=current();if(!valueOf(sel))return;
@@ -160,11 +179,25 @@
     for(const kind of ['wall','window','door','slide'])state.geometry[key[kind]].forEach((obj,index)=>{
       const r=kind==='door'||kind==='slide'?obj.rect:obj;
       s+=`<rect class="geo-hit" data-geokind="${kind}" data-index="${index}" x="${r[0]}" y="${r[1]}" width="${r[2]-r[0]}" height="${r[3]-r[1]}" fill="transparent" stroke="transparent" stroke-width="${Math.max(6*k,30)}" pointer-events="all"/>`;
+      if(kind==='door'){
+        // 门扇和开启弧线可能远离门洞；热区随门的铰链、方向及宽度一起移动。
+        const [hx,hy]=obj.h,L=obj.len,T=40,ox=hx+obj.o[0]*L,oy=hy+obj.o[1]*L,cx=hx+obj.c[0]*L,cy=hy+obj.c[1]*L;
+        const sweep=obj.o[0]*obj.c[1]-obj.o[1]*obj.c[0]>0?1:0;
+        const attrs=`class="geo-hit" data-geokind="door" data-index="${index}" stroke="transparent" stroke-width="${(COARSE?16:10)*k}"`;
+        s+=`<polygon ${attrs} points="${hx},${hy} ${ox},${oy} ${ox+obj.c[0]*T},${oy+obj.c[1]*T} ${hx+obj.c[0]*T},${hy+obj.c[1]*T}" fill="transparent" pointer-events="all"/>`;
+        // 只命中弧线的描边，不覆盖整个扇形，以保留房间空白处的选择。
+        s+=`<path ${attrs} d="M${ox} ${oy}A${L} ${L} 0 0 ${sweep} ${cx} ${cy}" fill="none" pointer-events="stroke"/>`;
+      }
     });
     const sel=current(),obj=valueOf(sel);
     if(obj){
       if(sel.kind==='room'){
         s+=`<polygon points="${obj.poly.map(p=>p.join(',')).join(' ')}" fill="rgba(181,101,58,.08)" stroke="#b5653a" stroke-width="2" vector-effect="non-scaling-stroke" pointer-events="none"/>`;
+        obj.poly.forEach(([x,y],i)=>{
+          const [ex,ey]=obj.poly[(i+1)%obj.poly.length],mx=(x+ex)/2,my=(y+ey)/2,cursor=Math.abs(ex-x)>=Math.abs(ey-y)?'ns-resize':'ew-resize';
+          s+=`<line data-geo-handle="edge" data-edge="${i}" x1="${x}" y1="${y}" x2="${ex}" y2="${ey}" stroke="transparent" stroke-width="${(COARSE?18:10)*k}" pointer-events="stroke" style="cursor:${cursor}"/>`;
+          s+=`<rect data-geo-handle="edge" data-edge="${i}" x="${mx-5*k}" y="${my-5*k}" width="${10*k}" height="${10*k}" fill="#b5653a" stroke="white" stroke-width="1.5" vector-effect="non-scaling-stroke" style="cursor:${cursor}"><title>拖动调整此边，松手自动保存</title></rect>`;
+        });
         obj.poly.forEach(([x,y],i)=>s+=`<circle class="geo-vertex" data-geo-handle="vertex" data-vertex="${i}" cx="${x}" cy="${y}" r="${6*k}" fill="#fff" stroke="#b5653a" stroke-width="2" vector-effect="non-scaling-stroke"/>`);
       }else{
         const r=rectOf(sel),d=G.dimensions(r),a=d.vertical?[(r[0]+r[2])/2,r[1]]:[r[0],(r[1]+r[3])/2],b=d.vertical?[a[0],r[3]]:[r[2],a[1]];
@@ -199,7 +232,7 @@
       if(hit)pick(hit.dataset.geokind,+hit.dataset.index);
       else if(room&&!handle)pick('room',state.geometry.ROOMS.findIndex(r=>r.id===room.dataset.room));
       const sel=current();if(!sel)return;
-      gesture={type:handle?.dataset.geoHandle||'move',vertex:+handle?.dataset.vertex,sel,start:pos,sx:e.clientX,sy:e.clientY,before:snap(),base:G.clone(state),moved:false};
+      gesture={type:handle?.dataset.geoHandle||'move',vertex:+handle?.dataset.vertex,edge:+handle?.dataset.edge,sel,start:pos,sx:e.clientX,sy:e.clientY,before:snap(),base:G.clone(state),moved:false};
     }else return;
     svg.setPointerCapture(e.pointerId);renderSelection();
   },true);
@@ -213,7 +246,8 @@
       let g=G.clone(d.base.geometry);
       if(d.sel.kind==='room'){
         const r=g.ROOMS[d.sel.index];
-        if(d.type==='vertex')r.poly[d.vertex]=[p.x,p.y];
+        if(d.type==='edge')g=G.moveRoomEdge(g,d.sel.index,d.edge,p.x-d.start.x,p.y-d.start.y);
+        else if(d.type==='vertex'){r.poly[d.vertex]=[p.x,p.y];r.at=[0,1].map(axis=>r.poly.reduce((s,q)=>s+q[axis],0)/r.poly.length);}
         else{const dx=p.x-d.start.x,dy=p.y-d.start.y;r.poly=r.poly.map(([x,y])=>[x+dx,y+dy]);if(r.at)r.at=[r.at[0]+dx,r.at[1]+dy];}
         g=G.normalize(g);
       }else{
@@ -224,7 +258,7 @@
         else if(d.type==='end')next[vertical?3:2]=Math.max(p[vertical?'y':'x'],next[vertical?1:0]+50);
         g=G.replaceRect(g,d.sel.kind,d.sel.index,next,linkRoomFaces);
       }
-      state={...d.base,geometry:g};renderAll();
+      state={...d.base,geometry:g};d.error=null;renderAll();
     }catch(err){d.error=err.message;}
   },true);
   function pointerEnd(e){
@@ -253,7 +287,7 @@
         }catch(err){error(err.message);}
       }else toast('请按住拖出一段长度，再松开完成绘制');
     }else if(d.moved){
-      if(snap()!==d.before){commit(d.before);renderAll();}
+      if(snap()!==d.before){commit(d.before);saveCompletedEdit();renderAll();}
       if(d.error)toast(d.error);
     }else if(narrow())drawer('panel',true);
     renderSelection();

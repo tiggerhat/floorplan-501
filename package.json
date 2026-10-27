@@ -1,6 +1,6 @@
 {
   "name": "floorplan-501",
-  "version": "3.0.1",
+  "version": "3.1.0",
   "private": true,
   "description": "Editable 501 floor plan with walls, windows, rooms and 3D preview",
   "scripts": {

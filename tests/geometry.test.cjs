@@ -3,6 +3,25 @@ const assert=require('node:assert/strict');
 const G=require('../geometry-core.js');
 const geometry=()=>G.normalize({WALLS:[[0,0,4000,240,'u']],WINS:[[1000,0,2200,240]],DOORS:[],SLIDES:[],ROOMS:[{id:'room',name:'房间',mat:'tile800',poly:[[0,240],[4000,240],[4000,4000],[0,4000]],at:[2000,2000]}]});
 
+test('room edge drag resizes only its two endpoints and follows the edge normal',()=>{
+ const g=geometry(),next=G.moveRoomEdge(g,0,1,500,800);
+ assert.deepEqual(next.ROOMS[0].poly,[[0,240],[4500,240],[4500,4000],[0,4000]]);
+ assert.deepEqual(g.ROOMS[0].poly,geometry().ROOMS[0].poly);
+ assert.deepEqual(next.ROOMS[0].at,[2250,2120]);
+ assert.deepEqual(G.normalize(JSON.parse(JSON.stringify(next))),next);
+});
+test('diagonal room edges move perpendicular to themselves',()=>{
+ const g=geometry();g.ROOMS[0].poly=[[0,1000],[1000,0],[2000,1000],[1000,2000]];
+ const next=G.moveRoomEdge(g,0,0,100,100);
+ assert.deepEqual(next.ROOMS[0].poly,[[100,1100],[1100,100],[2000,1000],[1000,2000]]);
+});
+test('invalid edge drag leaves the original room intact',()=>{
+ const g=geometry(),before=G.clone(g);
+ assert.throws(()=>G.moveRoomEdge(g,0,1,-4500,0),/边界/);
+ assert.deepEqual(g,before);
+ assert.throws(()=>G.moveRoomEdge(g,0,4,100,100),/边界不存在/);
+});
+
 test('wall resize is immutable and survives a JSON round trip',()=>{
  const original=geometry(),next=G.replaceRect(original,'wall',0,[0,0,5000,240]);
  assert.equal(original.WALLS[0][2],4000);assert.equal(next.WALLS[0][2],5000);
